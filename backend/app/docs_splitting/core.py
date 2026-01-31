@@ -1,9 +1,10 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import UploadFile, File, HTTPException, Form
+from fastapi.responses import FileResponse
 from fastapi.routing import APIRouter
 
 from app.rag.loaders import load_and_split
@@ -38,7 +39,6 @@ def save_uploaded_file(file: UploadFile, collection_id: str) -> Path:
 def test_route() -> Literal["This is testing route for docs splitting section"]:
     return "This is testing route for docs splitting section"
 
-
 @docsRoute.post("/upload")
 async def upload_and_embed(file: UploadFile = File(...)) -> dict:
     """Upload a PDF/DOCX, chunk it, and store embeddings in Chroma without Q&A."""
@@ -66,15 +66,17 @@ async def upload_and_embed(file: UploadFile = File(...)) -> dict:
         "file_saved": str(saved_path.name)
     }
 
-
 @docsRoute.post("/upload-only")
-async def upload_only(file: UploadFile = File(...)) -> dict:
+async def upload_only(
+    file: UploadFile = File(...),
+    collection_id: Optional[str] = Form(None),
+) -> dict:
     """Upload a file and save it without processing/vectorization."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="File is required.")
 
-    # Generate a unique collection ID for this upload
-    collection_id = generate_collection_id()
+    # Reuse provided collection ID if present, otherwise create a new one
+    collection_id = collection_id or generate_collection_id()
 
     # Save the original file to the collection folder
     saved_path = save_uploaded_file(file, collection_id)
@@ -86,6 +88,18 @@ async def upload_only(file: UploadFile = File(...)) -> dict:
         "file_saved": str(saved_path.name),
         "message": "File uploaded successfully. Use /process endpoint to vectorize."
     }
+
+
+@docsRoute.get("/uploaded/{collection_id}/{filename}")
+def download_uploaded_file(collection_id: str, filename: str):
+    """Serve the original uploaded document."""
+    collection_folder = UPLOADED_FILES_DIR / collection_id
+    file_path = collection_folder / filename
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found.")
+
+    return FileResponse(file_path, filename=filename)
 
 
 @docsRoute.post("/process")

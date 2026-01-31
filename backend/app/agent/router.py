@@ -2,7 +2,7 @@ from typing import Optional, List
 
 from fastapi import APIRouter,  Form
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import json
 import asyncio
 
@@ -26,6 +26,7 @@ class ChatHistoryResponse(BaseModel):
     messages: List[ChatMessage]
     collection_id: str
     filename: Optional[str] = None
+    filenames: List[str] = Field(default_factory=list)
 
 
 
@@ -84,14 +85,17 @@ async def get_history(collection_id: str):
     
     # Try to get filename from uploaded files
     filename = None
+    filenames: List[str] = []
     uploaded_files_dir = Path(__file__).parent.parent / "uploaded_files" / collection_id
     if uploaded_files_dir.exists():
         files = list(uploaded_files_dir.glob("*"))
         if files:
-            filename = files[0].name
+            filenames = [f.name for f in files]
+            filename = filenames[0]
     
     return ChatHistoryResponse(
         messages=[ChatMessage(**msg) for msg in messages],
         collection_id=collection_id,
-        filename=filename
+        filename=filename,
+        filenames=filenames
     )

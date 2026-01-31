@@ -6,11 +6,15 @@ import { memo } from 'react';
 
 interface MarkdownRendererProps {
   content: string;
+  className?: string;
 }
 
-const MarkdownRenderer = memo(({ content }: MarkdownRendererProps) => {
+const MarkdownRenderer = memo(({ content, className }: MarkdownRendererProps) => {
+  const baseClasses = "text-base leading-relaxed text-gray-800";
+  const mergedClassName = className ? `${baseClasses} ${className}` : baseClasses;
+
   return (
-    <div className="text-base leading-relaxed text-gray-800">
+    <div className={mergedClassName}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

@@ -115,9 +115,10 @@ export default function FileUploadPanel({ onUploadSuccess }: FileUploadPanelProp
       const data = await response.json();
       const cid = data.collection_id;
       
-      // Store filename in localStorage for immediate display
+      // Store filename(s) in localStorage for immediate display
       if (data.filename) {
         localStorage.setItem(`filename_${cid}`, data.filename);
+        localStorage.setItem(`filenames_${cid}`, JSON.stringify([data.filename]));
       }
       
       // Navigate to chat immediately

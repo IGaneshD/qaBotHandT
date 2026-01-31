@@ -6,6 +6,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file');
+    const collectionId = formData.get('collection_id');
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
@@ -25,6 +26,10 @@ export async function POST(request: NextRequest) {
     const backendFormData = new FormData();
     backendFormData.append('file', blob, file.name);
 
+    if (collectionId && typeof collectionId === 'string') {
+      backendFormData.append('collection_id', collectionId);
+    }
+
     const response = await fetch(`${BACKEND_URL}/docs_splitting/upload`, {
       method: 'POST',
       body: backendFormData,
@@ -43,6 +48,7 @@ export async function POST(request: NextRequest) {
       message: data.message || 'File uploaded successfully!',
       collection_id: data.collection_id,
       filename: data.filename,
+      chunks_indexed: data.chunks_indexed,
     });
   } catch (error) {
     console.error('Upload error:', error);
