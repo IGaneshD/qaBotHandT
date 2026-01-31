@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { Upload, File, X, Loader2 } from "lucide-react";
-import { uploadFile } from "@/lib/uploadClient";
 
 const ACCEPTED_TYPES = ".pdf,.doc,.docx";
 const ALLOWED_EXTENSIONS = new Set(["pdf", "doc", "docx"]);

@@ -86,7 +86,7 @@ export default function Home() {
       {/* Split Documents Modal */}
       {showSplitModal && collectionId && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="relative bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-auto">
+          <div className="relative bg-white rounded-3xl shadow-2xl max-w-4xl w-full h-[90vh] flex flex-col">
             <button
               onClick={() => setShowSplitModal(false)}
               className="absolute top-4 right-4 bg-gray-100 rounded-full p-2 hover:bg-gray-200 transition cursor-pointer z-10"
@@ -96,7 +96,7 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            <div className="p-8">
+            <div className="flex-1 overflow-y-auto p-8">
               <PdfSplitter />
             </div>
           </div>

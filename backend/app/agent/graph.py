@@ -25,35 +25,43 @@ class GraphState(TypedDict):
     messages: List[BaseMessage]
 
 
-def _get_llm(provider: str = "azure_openai", model: str = "gpt-4o"):
-    """Get LLM instance with specified provider and model."""
-    if provider == "gemini":
-        return ChatGoogleGenerativeAI(
-            model=model,
-            temperature=0,
-        )
-    elif provider == "openai":
-        return ChatOpenAI(
-            model=model,
-            temperature=0,
-            api_key=os.getenv("OPENAI_API_KEY"),
-        )
-    elif provider == "azure_openai":
-        return AzureChatOpenAI(
-            azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", model),
-            temperature=0,
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
-        )
-    elif provider == "groq":
-        return ChatGroq(
-            model=model,
-            temperature=0,
-            api_key=os.getenv("GROQ_API_KEY"),
-        )
-    else:
-        raise ValueError(f"Unsupported provider: {provider}")
+def _get_llm(provider: str = "gemini", model: str = "gemini-2.0-flash"):
+    """Get LLM instance - currently using Google Gemini."""
+    return ChatGoogleGenerativeAI(
+        model=model,
+        temperature=0,
+    )
+    
+    
+    
+    # """Get LLM instance with specified provider and model."""
+    # if provider == "gemini":
+    #     return ChatGoogleGenerativeAI(
+    #         model=model,
+    #         temperature=0,
+    #     )
+    # elif provider == "openai":
+    #     return ChatOpenAI(
+    #         model=model,
+    #         temperature=0,
+    #         api_key=os.getenv("OPENAI_API_KEY"),
+    #     )
+    # elif provider == "azure_openai":
+    #     return AzureChatOpenAI(
+    #         azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", model),
+    #         temperature=0,
+    #         azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+    #         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+    #         api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+    #     )
+    # elif provider == "groq":
+    #     return ChatGroq(
+    #         model=model,
+    #         temperature=0,
+    #         api_key=os.getenv("GROQ_API_KEY"),
+    #     )
+    # else:
+    #     raise ValueError(f"Unsupported provider: {provider}")
 
 
 def _create_retrieve_tool(collection_id: Optional[str] = None):
@@ -73,15 +81,23 @@ def _create_retrieve_tool(collection_id: Optional[str] = None):
 
 # System prompt string for the agent
 _system_prompt = (
-    "You are a helpful assistant. Use the available tools to answer "
-    "questions based only on the uploaded documents. "
-    "Format your responses using Markdown for better readability:\n"
-    "- Use **bold** for emphasis and important points\n"
-    "- Use bullet points for lists\n"
-    "- Use numbered lists for sequential steps\n"
-    "- Use headings (##) for sections when appropriate\n"
-    "- Use code blocks for technical content\n"
-    "Provide clear, well-structured answers."
+    "You are a helpful document Q&A assistant. You MUST use the retrieve_context tool "
+    "to search the uploaded documents before answering ANY question. "
+    "ALWAYS call retrieve_context first with the user's question to get relevant content. "
+    "Base your answers ONLY on the retrieved document content. "
+    "If the retrieval returns no relevant content, say so clearly.\n\n"
+    "IMPORTANT: You MUST format ALL your responses using proper Markdown syntax:\n"
+    "- Use # for main headings and ## for subheadings\n"
+    "- Use **bold** for key terms and important points\n"
+    "- Use *italics* for emphasis\n"
+    "- Use - or * for bullet point lists\n"
+    "- Use 1. 2. 3. for numbered/ordered lists\n"
+    "- Use > for blockquotes when citing document content\n"
+    "- Use `code` for inline code and ```language``` for code blocks\n"
+    "- Use --- for horizontal rules to separate sections\n"
+    "- Use tables with | when presenting structured data\n\n"
+    "Structure your answers with clear headings and organized sections. "
+    "Make responses visually appealing and easy to scan."
 )
 
 
@@ -108,7 +124,7 @@ def _extract_answer(result: Any) -> str:
     return getattr(result, "content", str(result))
 
 
-def _answer_node(state: GraphState, provider: str = "azure_openai", model: str = "gpt-4o") -> GraphState:
+def _answer_node(state: GraphState, provider: str = "gemini", model: str = "gemini-2.0-flash") -> GraphState:
     question = state["question"]
     collection_id = state.get("collection_id")
     previous_messages = state.get("messages", [])
@@ -138,7 +154,7 @@ def _answer_node(state: GraphState, provider: str = "azure_openai", model: str =
     }
 
 
-async def arun_graph(question: str, collection_id: str, provider: str = "azure_openai", model: str = "gpt-4o") -> dict:
+async def arun_graph(question: str, collection_id: str, provider: str = "gemini", model: str = "gemini-2.0-flash") -> dict:
     """
     Async version: Run the graph with the given question and collection_id.
     Uses collection_id as both the retrieval collection and thread_id for checkpointing.
@@ -156,7 +172,11 @@ async def arun_graph(question: str, collection_id: str, provider: str = "azure_o
         # Get current state to retrieve message history
         config = {"configurable": {"thread_id": collection_id}}
         current_state = await compiled_app.aget_state(config)
-        existing_messages = current_state.values.get("messages", []) if current_state.values else []
+        
+        # Extract existing messages from the checkpoint
+        existing_messages = []
+        if current_state and hasattr(current_state, 'values') and current_state.values:
+            existing_messages = current_state.values.get("messages", [])
         
         result = await compiled_app.ainvoke(
             {"question": question, "collection_id": collection_id, "messages": existing_messages},
@@ -165,7 +185,7 @@ async def arun_graph(question: str, collection_id: str, provider: str = "azure_o
     return {"answer": result["answer"], "thread_id": collection_id}
 
 
-async def arun_graph_stream(question: str, collection_id: str, provider: str = "azure_openai", model: str = "gpt-4o"):
+async def arun_graph_stream(question: str, collection_id: str, provider: str = "gemini", model: str = "gemini-2.0-flash"):
     """
     Stream the answer token by token.
     """
@@ -210,34 +230,34 @@ async def get_chat_history(collection_id: str) -> List[dict]:
         async with AsyncSqliteSaver.from_conn_string("langgraph_state.db") as checkpointer:
             # Get the state history for this thread
             config = {"configurable": {"thread_id": collection_id}}
-            state_history = []
             
-            # Get all checkpoint states for this thread
-            async for state in checkpointer.alist(config):
-                if state and state.values:
-                    state_history.append(state.values)
+            # Get the most recent state
+            current_state = await checkpointer.aget(config)
             
-            # Extract messages from the most recent state
-            if state_history:
-                # Get the most recent state
-                latest_state = state_history[0]
+            if current_state and hasattr(current_state, 'checkpoint') and current_state.checkpoint:
+                # Extract messages from checkpoint
+                checkpoint_data = current_state.checkpoint.get('channel_values', {})
+                messages_list = checkpoint_data.get('messages', [])
                 
-                # Extract question/answer pairs
+                # Convert LangChain messages to simple dict format
                 messages = []
-                if "question" in latest_state and latest_state["question"]:
-                    messages.append({
-                        "role": "user",
-                        "content": latest_state["question"]
-                    })
-                if "answer" in latest_state and latest_state["answer"]:
-                    messages.append({
-                        "role": "assistant",
-                        "content": latest_state["answer"]
-                    })
+                for msg in messages_list:
+                    if isinstance(msg, HumanMessage):
+                        messages.append({
+                            "role": "user",
+                            "content": msg.content
+                        })
+                    elif isinstance(msg, AIMessage):
+                        messages.append({
+                            "role": "assistant",
+                            "content": msg.content
+                        })
                 
                 return messages
             
             return []
     except Exception as e:
         print(f"Error retrieving chat history: {e}")
+        import traceback
+        traceback.print_exc()
         return []

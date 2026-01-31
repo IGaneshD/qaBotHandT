@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, FileText, ArrowLeft, Plus } from 'lucide-react';
+import { Send, Loader2, FileText, Plus } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
 
 interface Message {
@@ -13,52 +13,19 @@ interface Message {
 
 interface ChatInterfaceProps {
   collectionId: string;
-  onBack?: () => void;
   onAddDocument?: () => void;
   onSplitDocuments?: () => void;
 }
 
-export default function ChatInterface({ collectionId, onBack, onAddDocument, onSplitDocuments }: ChatInterfaceProps) {
+export default function ChatInterface({ collectionId, onAddDocument, onSplitDocuments }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [filename, setFilename] = useState<string | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState('azure_openai');
-  const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [isProcessing, setIsProcessing] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  // Model options based on provider
-  const modelOptions: Record<string, { value: string; label: string }[]> = {
-    gemini: [
-      { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-      { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
-      { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash (Exp)' },
-    ],
-    openai: [
-      { value: 'gpt-4o', label: 'GPT-4o' },
-      { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-      { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-    ],
-    azure_openai: [
-      { value: 'gpt-4o', label: 'GPT-4o' },
-      { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-      { value: 'gpt-35-turbo', label: 'GPT-3.5 Turbo' },
-    ],
-    groq: [
-      { value: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B' },
-      { value: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B' },
-      { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
-    ],
-  };
-
-  // Update model when provider changes
-  const handleProviderChange = (provider: string) => {
-    setSelectedProvider(provider);
-    setSelectedModel(modelOptions[provider][0].value);
-  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -93,6 +60,8 @@ export default function ChatInterface({ collectionId, onBack, onAddDocument, onS
   // Load chat history when component mounts
   useEffect(() => {
     const loadHistory = async () => {
+      let hadStoredMessages = false;
+
       try {
         // Load filename from localStorage immediately
         const storedFilename = localStorage.getItem(`filename_${collectionId}`);
@@ -103,11 +72,20 @@ export default function ChatInterface({ collectionId, onBack, onAddDocument, onS
         // First try to load from localStorage
         const storedMessages = localStorage.getItem(`chat_${collectionId}`);
         if (storedMessages) {
-          const parsed = JSON.parse(storedMessages);
-          setMessages(parsed.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          })));
+          hadStoredMessages = true;
+          const parsed = JSON.parse(storedMessages) as Array<{
+            id: string;
+            role: 'user' | 'assistant';
+            content: string;
+            timestamp: string;
+          }>;
+
+          setMessages(
+            parsed.map((msg) => ({
+              ...msg,
+              timestamp: new Date(msg.timestamp),
+            }))
+          );
         }
 
         // Then fetch from backend
@@ -119,7 +97,7 @@ export default function ChatInterface({ collectionId, onBack, onAddDocument, onS
             localStorage.setItem(`filename_${collectionId}`, data.filename);
           }
           if (data.messages && data.messages.length > 0) {
-            const backendMessages: Message[] = data.messages.map((msg: any, index: number) => ({
+            const backendMessages: Message[] = (data.messages as Array<{ role: 'user' | 'assistant'; content: string }>).map((msg, index: number) => ({
               id: `${Date.now()}-${index}`,
               role: msg.role,
               content: msg.content,
@@ -128,7 +106,7 @@ export default function ChatInterface({ collectionId, onBack, onAddDocument, onS
             setMessages(backendMessages);
             // Update localStorage
             localStorage.setItem(`chat_${collectionId}`, JSON.stringify(backendMessages));
-          } else if (!storedMessages) {
+          } else if (!hadStoredMessages) {
             // No history, show welcome message
             setMessages([
               {
@@ -143,7 +121,7 @@ export default function ChatInterface({ collectionId, onBack, onAddDocument, onS
       } catch (error) {
         console.error('Failed to load chat history:', error);
         // If no stored messages, show welcome message
-        if (messages.length === 0) {
+        if (!hadStoredMessages) {
           setMessages([
             {
               id: '1',
@@ -187,8 +165,6 @@ export default function ChatInterface({ collectionId, onBack, onAddDocument, onS
       const formData = new FormData();
       formData.append('question', input);
       formData.append('collection_id', collectionId);
-      formData.append('provider', selectedProvider);
-      formData.append('model', selectedModel);
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -209,7 +185,8 @@ export default function ChatInterface({ collectionId, onBack, onAddDocument, onS
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
+    } catch (_error) {
+      console.error('Chat submit error:', _error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -250,27 +227,6 @@ export default function ChatInterface({ collectionId, onBack, onAddDocument, onS
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <select
-            value={selectedProvider}
-            onChange={(e) => handleProviderChange(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer bg-white"
-          >
-            <option value="gemini">Google Gemini</option>
-            <option value="openai">OpenAI</option>
-            <option value="azure_openai">Azure OpenAI</option>
-            <option value="groq">Groq</option>
-          </select>
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer bg-white"
-          >
-            {modelOptions[selectedProvider].map((model) => (
-              <option key={model.value} value={model.value}>
-                {model.label}
-              </option>
-            ))}
-          </select>
           {onSplitDocuments && (
             <button
               onClick={onSplitDocuments}
@@ -291,15 +247,6 @@ export default function ChatInterface({ collectionId, onBack, onAddDocument, onS
             >
               <Plus className="w-5 h-5" />
               Add Document
-            </button>
-          )}
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 transition cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              New Document
             </button>
           )}
         </div>

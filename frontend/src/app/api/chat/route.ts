@@ -7,8 +7,6 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const question = formData.get('question');
     const collectionId = formData.get('collection_id');
-    const provider = formData.get('provider') || 'gemini';
-    const model = formData.get('model') || 'gemini-1.5-flash';
 
     if (!question || typeof question !== 'string') {
       return NextResponse.json(
@@ -28,8 +26,6 @@ export async function POST(request: NextRequest) {
     const backendFormData = new FormData();
     backendFormData.append('question', question);
     backendFormData.append('collection_id', collectionId);
-    backendFormData.append('provider', provider as string);
-    backendFormData.append('model', model as string);
 
     const response = await fetch(`${BACKEND_URL}/agent/ask`, {
       method: 'POST',

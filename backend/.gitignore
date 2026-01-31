@@ -1,3 +1,8 @@
 __pycache__
 .ruff_cache
 .venv
+chroma_db
+langgraph*
+.env
+uploaded_files
+split_files

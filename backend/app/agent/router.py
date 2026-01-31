@@ -35,8 +35,8 @@ class ChatHistoryResponse(BaseModel):
 async def ask_question(
     question: str = Form(...),
     collection_id: str = Form(...),
-    provider: str = Form("azure_openai"),
-    model: str = Form("gpt-4o"),
+    provider: str = Form("gemini"),
+    model: str = Form("gemini-2.0-flash"),
 ):
     """Ask a question on an existing collection. collection_id is used as thread_id."""
     # Run graph with collection_id as both retrieval collection and thread_id

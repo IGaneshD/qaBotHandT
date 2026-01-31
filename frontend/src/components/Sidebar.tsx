@@ -22,46 +22,32 @@ export default function Sidebar({ currentCollectionId, onSelectConversation, onN
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isOpen, setIsOpen] = useState(true);
 
-  useEffect(() => {
-    loadConversations();
-  }, []);
-
-  // Reload conversations periodically to reflect new messages
-  useEffect(() => {
-    const interval = setInterval(loadConversations, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
   const loadConversations = async () => {
     try {
-      const keys = Object.keys(localStorage).filter(key => key.startsWith('chat_'));
+      const keys = Object.keys(localStorage).filter((key) => key.startsWith('chat_'));
       const convosPromises = keys.map(async (key) => {
         const collectionId = key.replace('chat_', '');
         const data = localStorage.getItem(key);
         if (data) {
-          const messages = JSON.parse(data);
+          const messages = JSON.parse(data) as Array<{
+            role: 'user' | 'assistant';
+            content: string;
+            timestamp?: string | number;
+          }>;
+
           const lastMsg = messages[messages.length - 1];
-          const firstUserMsg = messages.find((m: any) => m.role === 'user');
-          
-          // Fetch filename from backend
-          let filename: string | undefined = undefined;
-          try {
-            const response = await fetch(`/api/chat/history/${collectionId}`);
-            if (response.ok) {
-              const historyData = await response.json();
-              filename = historyData.filename;
-            }
-          } catch (error) {
-            console.error(`Failed to fetch filename for ${collectionId}:`, error);
-          }
-          
+          const firstUserMsg = messages.find((m) => m.role === 'user');
+
+          // Use cached filename from localStorage first
+          let filename: string | undefined = localStorage.getItem(`filename_${collectionId}`) || undefined;
+
           return {
             id: collectionId,
             collectionId,
             title: filename || (firstUserMsg ? firstUserMsg.content.slice(0, 50) + '...' : 'New Chat'),
             lastMessage: lastMsg?.content.slice(0, 60) || '',
             timestamp: new Date(lastMsg?.timestamp || Date.now()),
-            filename
+            filename,
           } as Conversation;
         }
         return null;
@@ -69,7 +55,7 @@ export default function Sidebar({ currentCollectionId, onSelectConversation, onN
 
       const convos = await Promise.all(convosPromises);
       const validConvos = convos.filter((c): c is Conversation => c !== null);
-      
+
       // Sort by timestamp, newest first
       validConvos.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
       setConversations(validConvos);
@@ -77,6 +63,20 @@ export default function Sidebar({ currentCollectionId, onSelectConversation, onN
       console.error('Failed to load conversations:', error);
     }
   };
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      void loadConversations();
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  // Reload conversations periodically to reflect new messages
+  useEffect(() => {
+    const interval = setInterval(loadConversations, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const deleteConversation = (collectionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
