@@ -7,8 +7,8 @@ from fastapi import UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse
 from fastapi.routing import APIRouter
 
-from app.rag.loaders import load_and_split
-from app.rag.vectorstore import add_documents, generate_collection_id
+from ..rag.loaders import load_and_split
+from ..rag.vectorstore import add_documents, generate_collection_id
 
 
 docsRoute = APIRouter(prefix="/docs_splitting")

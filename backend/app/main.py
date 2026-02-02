@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
     # Shutdown - graceful cleanup happens here
 
 
-app = FastAPI(title="HandT Bot for Bidding Docs", lifespan=lifespan)
+app = FastAPI(title="HnT Bot for Bidding Docs", lifespan=lifespan)
 
 app.include_router(router=docsRoute)
 app.include_router(router=split_router, prefix="/docs_splitting")
